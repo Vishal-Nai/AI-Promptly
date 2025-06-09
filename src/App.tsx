@@ -1,10 +1,19 @@
 import { useState, useEffect } from "react";
+import { Routes, Route, useNavigate, useLocation } from "react-router-dom";
 import { Header } from "./components/Header";
 import { Sidebar } from "./components/Sidebar";
-import { TemplateCard } from "./components/TemplateCard";
 import { TemplateForm } from "./components/TemplateForm";
 import { templateService } from "./services/templateService";
 import type { PromptTemplate } from "./types";
+import AboutPage from "./pages/AboutPage";
+import TemplatesPage from "./pages/TemplatesPage";
+import CategoriesPage from "./pages/CategoriesPage";
+import TagsPage from "./pages/TagsPage";
+import {
+  initGA,
+  trackGAEvent,
+} from "./services/googleAnalytics";
+import { trackMPEvent } from "./services/mixpanelService";
 
 function App() {
   const [templates, setTemplates] = useState<PromptTemplate[]>([]);
@@ -17,8 +26,13 @@ function App() {
   >();
   const [currentView, setCurrentView] = useState("templates");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const userId = "example-user-id"; // Replace with actual user ID logic
 
   useEffect(() => {
+    initGA(); // Initialize Google Analytics
+
     setTemplates(templateService.getTemplates());
     setCategories(["All Categories", ...templateService.getCategories()]);
   }, []);
@@ -41,12 +55,32 @@ function App() {
     template: Partial<PromptTemplate>
   ) => {
     templateService.updateTemplate(id, template);
+    trackGAEvent("update_template", userId, {
+      page: location.pathname,
+      message: "Template updated",
+    }); //For Google Analytics
+
+    trackMPEvent("update_template", userId, {
+      page: location.pathname,
+      message: "Template updated",
+    }); //For Mixpanel
+
     setTemplates(templateService.getTemplates());
     setEditingTemplate(undefined);
   };
 
   const handleDeleteTemplate = (id: string) => {
     if (window.confirm("Are you sure you want to delete this template?")) {
+      trackGAEvent("delete_template", userId, {
+        page: location.pathname,
+        message: "Template deleted",
+      }); //For Google Analytics
+
+      trackMPEvent("delete_template", userId, {
+        page: location.pathname,
+        message: "Template deleted",
+      }); //For Mixpanel
+      
       templateService.deleteTemplate(id);
       setTemplates(templateService.getTemplates());
     }
@@ -55,101 +89,7 @@ function App() {
   const handleNavigate = (view: string) => {
     setCurrentView(view);
     setIsSidebarOpen(false); // Close sidebar on navigation (mobile)
-  };
-
-  const renderContent = () => {
-    switch (currentView) {
-      case "templates":
-        return (
-          <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row gap-4">
-              <input
-                type="text"
-                placeholder="Search templates..."
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  handleSearch(e.target.value, selectedCategory);
-                }}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-              />
-              <select
-                value={selectedCategory}
-                onChange={(e) => {
-                  setSelectedCategory(e.target.value);
-                  handleSearch(searchQuery, e.target.value);
-                }}
-                className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-              >
-                {categories.map((category) => (
-                  <option key={category} value={category}>
-                    {category}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {templates.length > 0 ? (
-                templates.map((template) => (
-                  <TemplateCard
-                    key={template.id}
-                    template={template}
-                    onEdit={() => setEditingTemplate(template)}
-                    onDelete={() => handleDeleteTemplate(template.id)}
-                  />
-                ))
-              ) : (
-                <div className="col-span-full text-center py-12">
-                  <p className="text-gray-500">No templates found</p>
-                </div>
-              )}
-            </div>
-          </div>
-        );
-      case "categories":
-        return (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {templateService.getCategories().map((category) => (
-              <div
-                key={category}
-                className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow cursor-pointer"
-                onClick={() => {
-                  setSelectedCategory(category);
-                  handleNavigate("templates");
-                }}
-              >
-                <h3 className="font-medium text-lg">{category}</h3>
-                <p className="text-sm text-gray-500 mt-2">
-                  {templates.filter((t) => t.category === category).length}{" "}
-                  templates
-                </p>
-              </div>
-            ))}
-          </div>
-        );
-      case "tags":
-        return (
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-xl font-semibold mb-4">Tags</h2>
-            <div className="flex flex-wrap gap-2">
-              {templateService.getTags().map((tag) => (
-                <span
-                  key={tag}
-                  className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-full text-sm font-medium cursor-pointer hover:bg-indigo-100"
-                  onClick={() => {
-                    setSearchQuery(tag);
-                    handleNavigate("templates");
-                  }}
-                >
-                  {tag}
-                </span>
-              ))}
-            </div>
-          </div>
-        );
-      default:
-        return null;
-    }
+    navigate(`/${view}`); // Update the URL
   };
 
   return (
@@ -157,6 +97,7 @@ function App() {
       <Header
         onNewTemplate={() => setShowTemplateForm(true)}
         onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)}
+        onNavigate={handleNavigate}
       />
       <div className="flex h-[calc(100vh-4rem)]">
         <Sidebar
@@ -167,16 +108,62 @@ function App() {
         />
         <main className="flex-1 overflow-y-auto p-4 sm:p-6">
           <div className="max-w-7xl mx-auto">
-            {currentView === "templates" && (
-              <div className="flex justify-between items-center mb-6">
-                <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">
-                  {selectedCategory === "All Categories"
-                    ? "All Templates"
-                    : selectedCategory}
-                </h1>
-              </div>
-            )}
-            {renderContent()}
+            <Routes>
+              <Route path="/about" element={<AboutPage />} />
+              <Route
+                path="/templates"
+                element={
+                  <TemplatesPage
+                    templates={templates}
+                    searchQuery={searchQuery}
+                    selectedCategory={selectedCategory}
+                    categories={categories}
+                    onSearch={handleSearch}
+                    onEditTemplate={setEditingTemplate}
+                    onDeleteTemplate={handleDeleteTemplate}
+                  />
+                }
+              />
+              <Route
+                path="/categories"
+                element={
+                  <CategoriesPage
+                    categories={categories}
+                    templates={templates}
+                    onSelectCategory={(category) => {
+                      setSelectedCategory(category);
+                      handleNavigate("templates");
+                    }}
+                  />
+                }
+              />
+              <Route
+                path="/tags"
+                element={
+                  <TagsPage
+                    tags={templateService.getTags()}
+                    onSelectTag={(tag) => {
+                      setSearchQuery(tag);
+                      handleNavigate("templates");
+                    }}
+                  />
+                }
+              />
+              <Route
+                path="/"
+                element={
+                  <TemplatesPage
+                    templates={templates}
+                    searchQuery={searchQuery}
+                    selectedCategory={selectedCategory}
+                    categories={categories}
+                    onSearch={handleSearch}
+                    onEditTemplate={setEditingTemplate}
+                    onDeleteTemplate={handleDeleteTemplate}
+                  />
+                }
+              />
+            </Routes>
           </div>
         </main>
       </div>
