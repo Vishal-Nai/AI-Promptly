@@ -1,22 +1,40 @@
 import ReactGA from 'react-ga4';
 
+const reportAnalyticsError = (action: string, error: unknown) => {
+  console.error(`Google Analytics ${action} failed`, error);
+};
+
 export const initGA = () => {
-  ReactGA.initialize('G-4DX9T8H42Y', {
-    ...((import.meta.env.VITE_NODE_ENV === 'development' ? { debug: true } : {}) as any)
-  });
+  try {
+    ReactGA.initialize('G-4DX9T8H42Y');
+  } catch (error) {
+    reportAnalyticsError('init', error);
+  }
 };
 
 export const setUserId = (userId: string) => {
-  ReactGA.set({ user_id: userId });
+  try {
+    ReactGA.set({ user_id: userId });
+  } catch (error) {
+    reportAnalyticsError('setUserId', error);
+  }
 };
 
 export const trackGAPageView = (path: string) => {
-  ReactGA.send({ hitType: "pageview", page: path });
+  try {
+    ReactGA.send({ hitType: "pageview", page: path });
+  } catch (error) {
+    reportAnalyticsError('pageview', error);
+  }
 };
 
-export const trackGAEvent = (eventName: string, userId: string, properties?: Record<string, any>) => {
-  ReactGA.event(eventName, {
-    user_id: userId,
-    ...properties,
-  });
+export const trackGAEvent = (eventName: string, userId: string, properties?: Record<string, unknown>) => {
+  try {
+    ReactGA.event(eventName, {
+      user_id: userId,
+      ...properties,
+    });
+  } catch (error) {
+    reportAnalyticsError('event', error);
+  }
 };
